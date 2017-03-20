@@ -48,8 +48,9 @@ Deleteing 's3://some-bucket/dir1/dir1-backup-2017-01-09.zip' because we have 's3
 
 ## Files impacted and files ignored
 
-This script will *only* impact files of the format
-'[^/]+/[a-zA-Z0-9]+-YYYY-MM-DD(tHH:MM:SS)\..*' (where Y,M,D,H,M,S are
+This script will *only* impact files with an [ISO 8601](https://www.w3.org/TR/NOTE-datetime)
+format such as:
+'[^/]+/[a-zA-Z0-9]+-YYYY-MM-DD(THH:MM:SS)\..*' (where Y,M,D,H,M,S are
 all digits and expected to provide a valid date and/or/time) and purge
 them according to the algorithm.  
 

@@ -1,0 +1,56 @@
+#!/usr/bin/python
+
+# Purpose:  Quickie backup script 
+
+import datetime
+import re
+import sys
+import os
+import argparse
+import subprocess
+import time
+import boto
+import boto.s3
+
+def run(string):
+    if os.system(string) > 0:
+        raise Exception("Error running {}".format(string))
+
+Frequency = {
+    "minute": 60,
+    "hour": 3600,
+    "day": 86400,
+    "week": 604800,
+}
+
+def main():
+    p = argparse.ArgumentParser()
+
+    p.add_argument("-profile", help="boto profile name", required=False)
+    p.add_argument("-bucket", help="bucket name.  defaults to 'backups'", default="backups")
+    p.add_argument("-verbose", help="output verbose information", action="store_true")
+
+    args = p.parse_args()
+
+    progRegex = re.compile('.*(\d{4}\-\d\d\-\d\d([tT][\d:\.]*)?)([zZ]|([+\-])(\d\d):?(\d\d))?\..*')
+    
+    connection = boto.connect_s3(profile_name=args.profile)
+    bucket = connection.get_bucket(args.bucket)
+    for key in bucket.list():
+        m = progRegex.match(key.name)
+        if m:
+            print m.group(1)
+            #print datetime.datetime.strptime( m.group(1), "%Y-%m-%dT%H:%M:%S" )
+            try:
+                print datetime.datetime.strptime( m.group(1), "%Y-%m-%d" )
+            except ValueError:
+                try: 
+                    print datetime.datetime.strptime( m.group(1), "%Y-%m-%dT%H:%M:%S" )
+                except ValueError:
+                    print nil
+
+                  
+                
+if __name__ == "__main__":
+    main()
+
