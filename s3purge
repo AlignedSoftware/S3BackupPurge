@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 # Purpose:  File purge utility for AWS S3.
+# Purge files from backup buckets, preserving 1 per hour, 1 per day, 
+# 1 per week, 1 per month, 1 per year (for 7 years).
 
 import datetime
 import re
