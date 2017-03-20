@@ -1,11 +1,11 @@
-= S3 Backup Purge =
+# S3 Backup Purge 
 
 Purge files from backup buckets, preserving 1 per hour, 1 per day, 1
 per week, 1 per month, 1 per year (for 7 years).
 
 
 
-== Details ==
+## Details
 
 Given a series of files like this, when run on 2017-03-20
 ```
@@ -46,8 +46,7 @@ It also, in the output, specifies *why* it is deleting a file, such as:
 Deleteing 's3://some-bucket/dir1/dir1-backup-2017-01-09.zip' because we have 's3://some-bucket/dir1/dir1-backup-2017-01-10.zip' as monthly backup
 ```
 
-
-== Files impacted and files ignored ==
+## Files impacted and files ignored
 
 This script will *only* impact files of the format
 '[^/]+/[a-zA-Z0-9]+-YYYY-MM-DD(tHH:MM:SS)\..*' (where Y,M,D,H,M,S are
