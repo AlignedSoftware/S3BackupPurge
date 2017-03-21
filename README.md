@@ -4,6 +4,7 @@
 Purge files from backup buckets, preserving 1 per hour, 1 per day, 1
 per week, 1 per month, 1 per year (for 7 years).
 
+Requires python 2.7.X.
 
 ## Details
 
@@ -62,7 +63,7 @@ Any files that does *NOT* match this pattern will be ignored and
 preserved in S3.
 
 
-## Example usage
+## Example Usage
 
 Will perform the purge against the AWS bucket testing-s3purge and print reasons.
 Assumes a .boto file filled in properly with AWS creds in your home directory.
@@ -87,9 +88,15 @@ with credentials within the profile
 $ ./s3purge -bucket=testing-s3purge -verbose -profile=/path/to/my/botofile
 ```
 
-## .boto profile
+For the help:
+```shell
+$ ./s3purge -h
+$ ./s3purge --help
+```
 
-An example of a .boto profile for AWS woudl be the following:
+## .boto Profile
+
+An example of a .boto profile for AWS would be the following:
 
 ```
 [Credentials]
