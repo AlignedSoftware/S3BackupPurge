@@ -140,8 +140,8 @@ def main():
 # 1 per hour, 1 per day, 1 per week, 1 per month, 1 per year (for 7 years).
 #
 # A classic bin sorting approach is used successively.
-# This list of FileData objects to remove is returned.
-# Each FileData object contains a reason within appropriate
+# A list of FileData objects to remove is returned.
+# Each FileData object contains a reason that's appropriate
 # for display.
 #
 #

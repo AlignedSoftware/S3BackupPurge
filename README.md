@@ -88,7 +88,7 @@ with credentials within the profile
 $ ./s3purge -bucket=testing-s3purge -verbose -profile=/path/to/my/botofile
 ```
 
-For the help:
+For the help screen:
 ```shell
 $ ./s3purge -h
 $ ./s3purge --help
