@@ -1,8 +1,8 @@
+![alt text](https://github.com/AlignedSoftware/S3BackupPurge/blob/master/images/alignedsoftware.jpg "AlignedSoftware Inc. © 2017")
 # S3 Backup Purge 
 
 Purge files from backup buckets, preserving 1 per hour, 1 per day, 1
 per week, 1 per month, 1 per year (for 7 years).
-
 
 
 ## Details
@@ -46,10 +46,11 @@ It also, in the output, specifies *why* it is deleting a file, such as:
 Deleteing 's3://some-bucket/dir1/dir1-backup-2017-01-09.zip' because we have 's3://some-bucket/dir1/dir1-backup-2017-01-10.zip' as monthly backup
 ```
 
-## Files impacted and files ignored
+## Files Impacted and Files Ignored
 
 This script will *only* impact files with an [ISO 8601](https://www.w3.org/TR/NOTE-datetime)
 format such as:
+
 '[^/]+/[a-zA-Z0-9]+-YYYY-MM-DD(THH:MM:SS)\..*' (where Y,M,D,H,M,S are
 all digits and expected to provide a valid date and/or/time) and purge
 them according to the algorithm.  
@@ -59,3 +60,40 @@ midnight (time=0) on that day.
 
 Any files that does *NOT* match this pattern will be ignored and
 preserved in S3.
+
+
+## Example usage
+
+Will perform the purge against the AWS bucket testing-s3purge and print reasons.
+Assumes a .boto file filled in properly with AWS creds in your home directory.
+```shell
+$ ./s3purge -bucket=testing-s3purge
+```
+
+Will *not* perform the purge against the AWS bucket testing-s3purge but will print reasons.
+It's a dry-run. Just like make.
+```shell
+$ ./s3purge -bucket=testing-s3purge -n
+```
+
+Will perform the purge against the AWS bucket testing-s3purge and print reasons and debugging information.
+```shell
+$ ./s3purge -bucket=testing-s3purge -verbose
+```
+
+Will perform the purge against the AWS bucket testing-s3purge and print reasons and debugging information
+with credentials within the profile 
+```shell
+$ ./s3purge -bucket=testing-s3purge -verbose -profile=/path/to/my/botofile
+```
+
+## .boto profile
+
+An example of a .boto profile for AWS woudl be the following:
+
+```
+[Credentials]
+aws_access_key_id =ABCDEFGHIJKLMNOP
+aws_secret_access_key=aHLLmlLJ678+jljl9779734
+
+```

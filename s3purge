@@ -1,8 +1,29 @@
 #!/usr/bin/python
 
-# Purpose:  File purge utility for AWS S3.
-# Purge files from backup buckets, preserving 1 per hour, 1 per day, 
-# 1 per week, 1 per month, 1 per year (for 7 years).
+#Purpose:  File purge utility for AWS S3.
+#Purge files from backup buckets, preserving
+#1 per hour, 1 per day, 1 per week, 1 per month, 1 per year (for 7 years).
+#Example usage:
+
+# Will perform the purge against the AWS bucket testing-s3purge and print reasons.
+# Assumes a .boto file filled in properly with AWS creds in your home directory.
+#./s3purge -bucket=testing-s3purge
+
+# Will *not* perform the purge against the AWS bucket testing-s3purge but will print reasons.
+# It's a dry-run. Just like make.
+#./s3purge -bucket=testing-s3purge -n
+
+# Will perform the purge against the AWS bucket testing-s3purge and print reasons and debugging information.
+#./s3purge -bucket=testing-s3purge -verbose
+
+# Will perform the purge against the AWS bucket testing-s3purge and print reasons and debugging information
+# with credentials within the profile 
+#./s3purge -bucket=testing-s3purge -verbose -profile=/path/to/my/botofile
+#
+
+
+
+
 
 import datetime
 import re
@@ -14,13 +35,70 @@ import time
 import boto
 import boto.s3
 
+# Maintains the state of a FileData item within an S3 Bucket.
+# The object is comparable and has convenience accessors.
+# Can print itself for debugging.
+# Provides a reason for deletion.
+class FileData(object):
+    def __init__(self, s3key, dateTime):
+        self.s3key = s3key
+        self.dateTime = dateTime
+        self.deleteReason = ""
 
+    def name(self):
+        return self.s3key.name
+    
+    def key(self):
+        return self.s3key
+    
+    def reason(self, deleteReason):
+        self.deleteReason = deleteReason
+
+    def theReason(self):
+        return "Deleting \'{}\' because {}.".format(self.name(), self.deleteReason)
+    
+    def year(self):
+        return self.dateTime.year
+
+    def month(self):
+        return self.dateTime.month
+
+    def day(self):
+        return self.dateTime.day
+
+    def hour(self):
+        return self.dateTime.hour
+
+    def __eq__(self, other):
+        return self.dateTime == other.dateTime
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __lt__(self, other):
+        return self.dateTime < other.dateTime
+    
+    def __le__(self, other):
+        return self.dateTime <= other.dateTime
+
+    def __gt__(self, other):
+        return self.dateTime > other.dateTime
+    
+    def __ge__(self, other):
+        return self.dateTime >= other.dateTime
+
+    def __str__(self):
+        return "{} {} {}".format(self.s3key, self.dateTime, self.deleteReason)
+
+
+    
 def main():
     p = argparse.ArgumentParser()
 
     p.add_argument("-profile", help="boto profile name", required=False)
     p.add_argument("-bucket", help="bucket name.  defaults to 'backups'", default="backups")
     p.add_argument("-verbose", help="output verbose information", action="store_true")
+    p.add_argument("-n", help="Print the commands to execute *without* actual execution. Dry run.", required=False, action="store_true")
 
     args = p.parse_args()
 
@@ -31,33 +109,146 @@ def main():
     connection = boto.connect_s3(profile_name=args.profile)
     bucket = connection.get_bucket(args.bucket)
 
-    # A map of keys to datetimes for later processing.
-    files = {}
-    for key in bucket.list():
-        m = progRegex.match(key.name) # Matched an ISO 8601 datetime?
-        if m: # Yup! Got one.
-            files[key] = extractDateTime(m.group(1))
+    # A list of all matching files.
+    files = [FileData(key, extractDateTime(progRegex.match(key.name).group(1))) for key in bucket.list() if progRegex.match(key.name)]
+    files.sort() # by datetime
 
-    if args.verbose: print files
+    if args.verbose:
+        print "Files found: "
+    dumpList(args, files)
 
     # Process the files that matched.
+    filesToRemoveList = processFiles(args, files)
+
+    # If no files need culling...
+    if len(filesToRemoveList) == 0:
+        print "No files need to be culled."
+
+    # Remove all files within the filesToRemoveList and print reason.
+    # If the -n arg is set *DO NOT* actually perform the delete, just print
+    # what would have been culled.
+    for keyData in filesToRemoveList:
+        print keyData.theReason()
+        if not args.n:
+            keyData.key().delete()
+        
 
 
+# processFiles will remove all FileData objects from the files list
+# according to the following rule:
+#
+# 1 per hour, 1 per day, 1 per week, 1 per month, 1 per year (for 7 years).
+#
+# A classic bin sorting approach is used successively.
+# This list of FileData objects to remove is returned.
+# Each FileData object contains a reason within appropriate
+# for display.
+#
+#
+def processFiles(args, files):
+    filesToRemoveList = []
+
+    # First extract by year.
+    years = {}
+    for fileData in files:
+        if not fileData.year() in years:
+            years[fileData.year()] = []
+        years[fileData.year()].append(fileData)            
+
+    # Cull by year.
+    for k,v in years.items():
+        # First Rule: for years > 7 years ago, cull them
+        if datetime.datetime.today().year - k > 7:
+            cullList(years[k], filesToRemoveList, "the year {} is older than 7 years.".format(k))
+            continue
+
+        # Second Rule: if year is not this year, keep only the last one.
+        if datetime.datetime.today().year != k:
+            if len(years[k]) > 1:
+                years[k].sort()
+                keeper = years[k].pop()
+                cullList(years[k], filesToRemoveList, "we have {} as annual backup".format(keeper.key().name))
+
+    # Cull current year by month
+    # Sort by month
+    months = {1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 8:[], 10:[], 11:[], 12:[]}
+    for fileData in years[datetime.datetime.today().year]:
+        months[fileData.month()].append(fileData)
+
+    for k,v in months.items():
+        # First Rule: if month not this month, keep only the last one.
+        if k != datetime.datetime.today().month:
+            if len(months[k]) > 1:
+                   months[k].sort()
+                   keeper = months[k].pop()
+                   cullList(months[k], filesToRemoveList, "we have {} as monthly backup".format(keeper.key().name))
+
+    # Cull by day 
+    # Sort by day
+    days = {}
+    for v in months[datetime.datetime.today().month]:
+        if not v.day() in days:
+            days[v.day()] = []
+        days[v.day()].append(v)
+
+    for k,v in days.items():
+        # First Rule: if day not today, keep only the last one.
+        if k != datetime.datetime.today().day:
+            if len(days[k]) > 1:
+                days[k].sort()
+                keeper = days[k].pop()
+                cullList(days[k], filesToRemoveList, "we have {} as a daily backup".format(keeper.key().name))
+
+    
+    # Cull by hour
+    # Sort by hour
+    hours = {}
+    for v in days[datetime.datetime.today().day]:
+        if not v.hour() in hours:
+            hours[v.hour()] = []
+        hours[v.hour()].append(v)
+
+    for k,v in hours.items():
+        # First Rule: if not this hour, keep only the last one.
+        if k != datetime.datetime.today().hour:
+            if len(hours[k]) > 1:
+                hours[k].sort()
+                keeper = hours[k].pop()
+                cullList(hours[k], filesToRemoveList, "we have {} as an hourly backup".format(keeper.key().name))
+
+        
+    return filesToRemoveList
+
+
+# Will cull a list of FileData from fromList
+# and append them to toList with the given reason.
+def cullList(fromList, toList, reason):
+    for fileData in fromList:
+        fileData.reason(reason)
+        toList.append(fileData)
+
+    del fromList[:]
     
 # Accepts a filename and returns a datetime that matches the ISO 8601 format
 # Note the time is not required, just the date.
 # If a proper ISO 8601 format is not present within the filename then nil is returned.
 def extractDateTime(iso8601String):
-            try:
-                return datetime.datetime.strptime( iso8601String, "%Y-%m-%d" )
-            except ValueError:
-                try: 
-                    return datetime.datetime.strptime( iso8601String, "%Y-%m-%dT%H:%M:%S" )
-                except ValueError:
-                    return nil
+    try:
+        return datetime.datetime.strptime( iso8601String, "%Y-%m-%d" )
+    except ValueError:
+        try: 
+            return datetime.datetime.strptime( iso8601String, "%Y-%m-%dT%H:%M:%S" )
+        except ValueError:
+            return nil
+
+# Used for debugging, displays a list *if* verbose mode is active.        
+def dumpList(args, list):
+    if args.verbose:
+        for item in list:
+            print item
     
 
-    
+        
 if __name__ == "__main__":
     main()
 
