@@ -39,12 +39,19 @@ import boto.s3
 # The object is comparable and has convenience accessors.
 # Can print itself for debugging.
 # Provides a reason for deletion.
+# Maintains a prefix (that includes the file extension) to
+# differentiate different backup series.
 class FileData(object):
-    def __init__(self, s3key, dateTime):
+    def __init__(self, s3key, dateTime, dateTimeString):
         self.s3key = s3key
         self.dateTime = dateTime
         self.deleteReason = ""
+        self.dateTimeString = dateTimeString
+        self.filenamePrefix = os.path.basename(s3key.name).replace(dateTimeString, "")
 
+    def prefix(self):
+        return self.filenamePrefix
+    
     def name(self):
         return self.s3key.name
     
@@ -88,7 +95,7 @@ class FileData(object):
         return self.dateTime >= other.dateTime
 
     def __str__(self):
-        return "{} {} {}".format(self.s3key, self.dateTime, self.deleteReason)
+        return "{} {} {} {}".format(self.s3key, self.dateTime, self.deleteReason, self.filenamePrefix)
 
 
     
@@ -109,28 +116,41 @@ def main():
     connection = boto.connect_s3(profile_name=args.profile)
     bucket = connection.get_bucket(args.bucket)
 
-    # A list of all matching files.
-    files = [FileData(key, extractDateTime(progRegex.match(key.name).group(1))) for key in bucket.list() if progRegex.match(key.name)]
+    # A list of all matching files recursively gathered from the bucket.
+    files = [FileData(key, extractDateTime(progRegex.match(key.name).group(1)),progRegex.match(key.name).group(1)) for key in bucket.list() if progRegex.match(key.name)]
     files.sort() # by datetime
 
     if args.verbose:
         print "Files found: "
-    dumpList(args, files)
+        dumpList(args, files)
 
-    # Process the files that matched.
-    filesToRemoveList = processFiles(args, files)
 
-    # If no files need culling...
-    if len(filesToRemoveList) == 0:
-        print "No files need to be culled."
+    # Must sort the files into the same series. That is specifically all those files with the same prefix.
+    # The prefix essentially includes the filename sans the time thus it includes the extension.
+    series = {}
+    for fileData in files:
+        if not fileData.prefix() in series:
+            series[fileData.prefix()] = []
+        series[fileData.prefix()].append(fileData)
+        
+    # For each series....
+    for _,v in series.items():
+        #dumpList(args,v)
+        
+        # Process the files that matched for this series
+        filesToRemoveList = processFiles(args, v)
 
-    # Remove all files within the filesToRemoveList and print reason.
-    # If the -n arg is set *DO NOT* actually perform the delete, just print
-    # what would have been culled.
-    for keyData in filesToRemoveList:
-        print keyData.theReason()
-        if not args.n:
-            keyData.key().delete()
+        # If no files need culling...
+        if len(filesToRemoveList) == 0:
+            print "No files need to be culled."
+
+        # Remove all files within the filesToRemoveList and print reason.
+        # If the -n arg is set *DO NOT* actually perform the delete, just print
+        # what would have been culled.
+        for keyData in filesToRemoveList:
+            print keyData.theReason()
+            if not args.n:
+                keyData.key().delete()
         
 
 
@@ -172,10 +192,15 @@ def processFiles(args, files):
     # Cull current year by month
     # Sort by month
     months = {1:[], 2:[], 3:[], 4:[], 5:[], 6:[], 7:[], 8:[], 8:[], 10:[], 11:[], 12:[]}
+
+    # First check if there are any files this year
+    if not datetime.datetime.today().year in years:
+        return filesToRemoveList
+    
     for fileData in years[datetime.datetime.today().year]:
         months[fileData.month()].append(fileData)
 
-    for k,v in months.items():
+    for k,_ in months.items():
         # First Rule: if month not this month, keep only the last one.
         if k != datetime.datetime.today().month:
             if len(months[k]) > 1:
@@ -186,6 +211,11 @@ def processFiles(args, files):
     # Cull by day 
     # Sort by day
     days = {}
+
+    # First check if there are any files this month
+    if not datetime.datetime.today().month in months:
+        return filesToRemoveList
+
     for v in months[datetime.datetime.today().month]:
         if not v.day() in days:
             days[v.day()] = []
@@ -200,15 +230,20 @@ def processFiles(args, files):
                 cullList(days[k], filesToRemoveList, "we have {} as a daily backup".format(keeper.key().name))
 
     
-    # Cull by hour
+    # Cull by hour today.
     # Sort by hour
+
+    # First check if there are any files today.
+    if not datetime.datetime.today().day in days:
+        return filesToRemoveList
+    
     hours = {}
     for v in days[datetime.datetime.today().day]:
         if not v.hour() in hours:
             hours[v.hour()] = []
         hours[v.hour()].append(v)
 
-    for k,v in hours.items():
+    for k,_ in hours.items():
         # First Rule: if not this hour, keep only the last one.
         if k != datetime.datetime.today().hour:
             if len(hours[k]) > 1:
