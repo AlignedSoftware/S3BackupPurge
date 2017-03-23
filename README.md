@@ -66,7 +66,7 @@ s3://some-bucket/dir1/dir2-backup-2017-03-23.zip
 ```
 
 Note also that the script works recursively on the bucket directory structure
-and will tree liked-name series in sub-directories in the same manner. This allows
+and will treat liked-name series in sub-directories in the same manner. This allows
 files to be moved about in different sub-directories without ill effect.
 
 ## Files Impacted and Files Ignored
