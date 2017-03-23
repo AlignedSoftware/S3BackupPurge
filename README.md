@@ -47,6 +47,28 @@ It also, in the output, specifies *why* it is deleting a file, such as:
 Deleteing 's3://some-bucket/dir1/dir1-backup-2017-01-09.zip' because we have 's3://some-bucket/dir1/dir1-backup-2017-01-10.zip' as monthly backup
 ```
 
+Note that the script will handle multiple series within the same directory structure.
+All that need change is the name of the file and they will be handled as a separate series.
+Example:
+
+```
+s3://some-bucket/dir1/dir1-backup-2016-12-31.zip
+s3://some-bucket/dir1/dir1-backup-2017-01-10.zip
+s3://some-bucket/dir1/dir1-backup-2017-02-01.zip
+s3://some-bucket/dir1/dir1-backup-2017-03-01.zip
+s3://some-bucket/dir1/dir1-backup-2017-03-02.zip
+s3://some-bucket/dir1/dir1-backup-2017-03-18.zip
+s3://some-bucket/dir1/dir1-backup-2017-03-19.zip
+s3://some-bucket/dir1/dir1-backup-2017-03-20.zip
+s3://some-bucket/dir1/dir2-backup-2017-03-21.zip
+s3://some-bucket/dir1/dir2-backup-2017-03-22.zip
+s3://some-bucket/dir1/dir2-backup-2017-03-23.zip
+```
+
+Note also that the script works recursively on the bucket directory structure
+and will tree liked-name series in sub-directories in the same manner. This allows
+files to be moved about in different sub-directories without ill effect.
+
 ## Files Impacted and Files Ignored
 
 This script will *only* impact files with an [ISO 8601](https://www.w3.org/TR/NOTE-datetime)
